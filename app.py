@@ -1,10 +1,12 @@
-
 import streamlit as st
-import pickle
 import pandas as pd
 import requests
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 
+st.set_page_config(page_title="Movie Recommender", layout="wide")
 
+# ---------------- FETCH POSTER ---------------- #
 @st.cache_data(show_spinner=False)
 def fetch_poster(movie_id):
     if pd.isna(movie_id):
@@ -12,7 +14,7 @@ def fetch_poster(movie_id):
 
     url = f"https://api.themoviedb.org/3/movie/{movie_id}"
     params = {
-        "api_key": "bb8b6caa63e15d5221c86ea89686657c",
+        "api_key": "bb8b6caa63e15d5221c86ea89686657c",  # 🔴 Replace with your TMDB API key
         "language": "en-US"
     }
 
@@ -21,72 +23,73 @@ def fetch_poster(movie_id):
         response.raise_for_status()
         data = response.json()
 
-        return (
-            "https://image.tmdb.org/t/p/w500/" + data["poster_path"]
-            if data.get("poster_path")
-            else "https://via.placeholder.com/500x750?text=No+Poster"
-        )
+        if data.get("poster_path"):
+            return "https://image.tmdb.org/t/p/w500/" + data["poster_path"]
+        else:
+            return "https://via.placeholder.com/500x750?text=No+Poster"
 
-    except requests.exceptions.RequestException as e:
-        print(e)
+    except:
         return "https://via.placeholder.com/500x750?text=Error"
 
 
+# ---------------- LOAD DATA ---------------- #
+@st.cache_data
+def load_data():
+    df = pd.read_csv("final_movies.csv")  # 🔴 Your dataset file name
+    return df
 
+movies_df = load_data()
+
+# ---------------- VECTORIZE ---------------- #
+@st.cache_resource
+def create_similarity():
+    cv = CountVectorizer(max_features=5000, stop_words='english')
+    vectors = cv.fit_transform(movies_df['tags'])
+    similarity_matrix = cosine_similarity(vectors)
+    return similarity_matrix
+
+similarity = create_similarity()
+
+
+# ---------------- RECOMMEND FUNCTION ---------------- #
 def recommend(movie):
     movie_index = movies_df[movies_df['title'] == movie].index[0]
     distances = similarity[movie_index]
-    movies_indices = sorted(list(enumerate(distances)),reverse=True, key=lambda x:x[1])[1:6]
+    movies_indices = sorted(
+        list(enumerate(distances)),
+        reverse=True,
+        key=lambda x: x[1]
+    )[1:6]
 
     recommended_movies = []
-    recommended_movies_posters = []
+    recommended_posters = []
+
     for i in movies_indices:
         movie_id = movies_df.iloc[i[0]].movie_id
-
         recommended_movies.append(movies_df.iloc[i[0]].title)
-        # fetch poster from API
-        recommended_movies_posters.append(fetch_poster(movie_id))
-    return recommended_movies,recommended_movies_posters
+        recommended_posters.append(fetch_poster(movie_id))
+
+    return recommended_movies, recommended_posters
 
 
-movies_df = pickle.load(open('movies.pkl','rb'))
-movies_list = movies_df['title'].values
+# ---------------- STREAMLIT UI ---------------- #
+st.header("Movie Recommendation System 🎬")
 
-similarity = pickle.load(open('similarity.pkl','rb'))
+selected_movie_name = st.selectbox(
+    "Select a movie",
+    movies_df['title'].values
+)
 
+if st.button("Recommend similar movies"):
+    names, posters = recommend(selected_movie_name)
 
-st.header('Movie Recommendation System 🎬')
+    cols = st.columns(5)
 
-selected_movie_name = st.selectbox('Select a movie', movies_list)
+    for i in range(5):
+        with cols[i]:
+            st.text(names[i])
+            st.image(posters[i])
 
-if st.button('Recommend similar movies'):
-    names,posters = recommend(selected_movie_name)
-    
-    col1, col2, col3, col4, col5 = st.columns(5)
-    with col1:
-        st.text(names[0])
-        st.image(posters[0])
-    with col2:
-        st.text(names[1])
-        st.image(posters[1])
-    with col3:
-        st.text(names[2])
-        st.image(posters[2])
-    with col4:
-        st.text(names[3])
-        st.image(posters[3])
-    with col5:
-        st.text(names[4])
-        st.image(posters[4])
-
-
-
-
-
-# def fetch_poster(movie_id):
-#     response = requests.get('https://api.themoviedb.org/3/movie/{}?api_key=bb8b6caa63e15d5221c86ea89686657c&language=en-US'.format(movie_id))
-#     data = response.json()
-#     return "https://image.tmdb.org/t/p/w500/" + data['poster_path']
 
 
 
@@ -94,3 +97,4 @@ if st.button('Recommend similar movies'):
 # bb8b6caa63e15d5221c86ea89686657c
 
 # https://api.themoviedb.org/3/movie/movie_id?language=en-US
+
