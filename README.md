@@ -1,4 +1,4 @@
-# 🎬 Movie Recommendation System using Machine Learning & Natural Language Processing
+# 🎬 Movie Recommendation System using Machine Learning & NLP
 
 ## 📌 Project Overview
 This project is a Content-Based Movie Recommendation System built using Machine Learning and Natural Language Processing (NLP).
